@@ -34,7 +34,7 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 from torch.utils.data.distributed import DistributedSampler
 
 from transformers import AutoTokenizer
-from transformers import BertForSequenceClassification
+from transformers import AutoModelForSequenceClassification
 from transformers import AdamW
 from transformers import PYTORCH_PRETRAINED_BERT_CACHE
 from transformers import get_linear_schedule_with_warmup
@@ -320,7 +320,7 @@ def main():
     cache = PYTORCH_PRETRAINED_BERT_CACHE
     if (cache is not Path):
         cache = Path(cache)
-    model = BertForSequenceClassification.from_pretrained(args.bert_model,
+    model = AutoModelForSequenceClassification.from_pretrained(args.bert_model,
               cache_dir=cache / 'distributed_{}'.format(args.local_rank),
               num_labels = num_labels)
 
@@ -428,7 +428,7 @@ def main():
 
     # Load a trained model that you have fine-tuned
     model_state_dict = torch.load(model_file,map_location='cpu')
-    model = BertForSequenceClassification.from_pretrained(args.bert_model, state_dict=model_state_dict,num_labels = num_labels)
+    model = AutoModelForSequenceClassification.from_pretrained(args.bert_model, state_dict=model_state_dict,num_labels = num_labels)
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
