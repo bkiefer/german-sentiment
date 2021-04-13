@@ -10,10 +10,8 @@ from sklearn.metrics import precision_recall_fscore_support as score
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 
-from pytorch_pretrained_bert.tokenization import BertTokenizer
-from pytorch_pretrained_bert.modeling import BertForSequenceClassification
-from pytorch_pretrained_bert.optimization import BertAdam
-from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
+from transformers import AutoTokenizer
+from transformers import BertForSequenceClassification
 
 from tqdm import tqdm
 from tabulate import tabulate
@@ -37,7 +35,7 @@ class SystemUnderTest(object):
 
     def predict(self, samples):
         """predicts the class for a list of known samples"""
-        
+
         raise NotImplementedError()
 
 class BertTest(SystemUnderTest):
@@ -58,22 +56,22 @@ class BertTest(SystemUnderTest):
         self.label_list = self.processor.get_labels()
         self.num_labels = len(self.label_list)
 
-        model_file = os.path.join(args.output_dir, "pytorch_model.bin")        
+        model_file = os.path.join(args.output_dir, "pytorch_model.bin")
 
-        self.tokenizer = BertTokenizer.from_pretrained(self.bert_model, do_lower_case=self.do_lower_case)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.bert_model, do_lower_case=self.do_lower_case)
         self.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         self.n_gpu = torch.cuda.device_count()
 
         model_state_dict = torch.load(model_file, map_location='cpu') if args.no_cuda else torch.load(model_file)
-        self.model = BertForSequenceClassification.from_pretrained(self.bert_model, state_dict=model_state_dict, num_labels = self.num_labels)            
+        self.model = BertForSequenceClassification.from_pretrained(self.bert_model, state_dict=model_state_dict, num_labels = self.num_labels)
         self.model.to(self.device)
-    
-    @torch.no_grad()   
+
+    @torch.no_grad()
     def predict(self, eval_examples):
-        """predicts the class for a list of known samples"""          
+        """predicts the class for a list of known samples"""
         eval_features = tools.convert_examples_to_features(eval_examples, self.label_list, self.max_seq_length, self.tokenizer)
         eval_examples_count = len(eval_examples)
-        
+
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", eval_examples_count)
         logger.info("  Batch size = %d", args.eval_batch_size)
@@ -81,7 +79,7 @@ class BertTest(SystemUnderTest):
         all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
-        
+
         eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids)
         # Run prediction for full data
         eval_sampler = SequentialSampler(eval_data)
@@ -99,19 +97,20 @@ class BertTest(SystemUnderTest):
             input_mask = input_mask.to(self.device)
             segment_ids = segment_ids.to(self.device)
             #label_ids = label_ids.to(device)
-            
+
             #tmp_eval_loss = model(input_ids, segment_ids, input_mask, label_ids)
-            logits = self.model(input_ids, segment_ids, input_mask)
+            outputs = self.model(input_ids, segment_ids, input_mask)
+            logits = outputs[0]
 
             logits = logits.detach().cpu().numpy()
-            #label_ids = label_ids.numpy()        
-            #eval_loss += tmp_eval_loss.mean().item()        
-            predictions = np.append(predictions,np.argmax(logits, axis=1)) 
+            #label_ids = label_ids.numpy()
+            #eval_loss += tmp_eval_loss.mean().item()
+            predictions = np.append(predictions,np.argmax(logits, axis=1))
 
         # returning full text labels rather then numbers helps tracing errors
         lookup = self.processor.get_labels()
         map_classes = lambda x: [lookup[int(item)] for item in x]
-        
+
         return map_classes(truth), map_classes(predictions)
 
 def accuracy(out, labels):
@@ -124,29 +123,29 @@ def stat_fscore(truth, predicted):
 
     return [precisionMicro.item(), recallMicro.item(), fscoreMicro.item(), precisionMacro.item(), recallMacro.item(), fscoreMacro.item()]
 
-def run(args):        
+def run(args):
 
     model = BertTest(**vars(args))
-    
+
     processor = processors.processor_for_task(args.task_name)
     data = processor.get_text_data_by_dataset(args.data_dir)
-        
-    table = []        
+
+    table = []
 
     all_truth = []
     all_prediction = []
     print("datasets")
     print([f" {row[0]} - {len(row[1])} " for row in data])
-    
+
     for row in data:
         truth, prediction = model.predict(row[1])
-        result = stat_fscore(truth, prediction)        
+        result = stat_fscore(truth, prediction)
         table.append([row[0]] + result)
         all_truth.extend(truth)
         all_prediction.extend(prediction)
 
     table.append(["all"] +stat_fscore(all_truth,all_prediction))
-    
+
     sumRow = ["sum"]
     for col in range(1, len(table[0])):
         rowSum = sum(map(lambda x: x[col], table))
@@ -157,10 +156,10 @@ def run(args):
                "fscoreMicro", "precisionMacro", "recallMacro", "fscoreMacro"]
     print(tabulate(table, headers, tablefmt="pipe", floatfmt=".4f"))
 
-    
+
     plt = printcm.plot_confusion_matrix(all_truth, all_prediction, classes=[
-                                      "negative", "neutral", "positive"], normalize=True, title="Bert unbalanced")                                          
-                                      
+                                      "negative", "neutral", "positive"], normalize=True, title="Bert unbalanced")
+
     plt.savefig(args.output_dir + "cm.pdf")
 
     return table
@@ -204,7 +203,7 @@ if __name__ == "__main__":
     parser.add_argument("--local_rank",
                         type=int,
                         default=-1,
-                        help="local_rank for distributed training on gpus")    
+                        help="local_rank for distributed training on gpus")
     parser.add_argument("--eval_batch_size",
                         default=8,
                         type=int,
@@ -212,11 +211,11 @@ if __name__ == "__main__":
     parser.add_argument("--do_lower_case",
                         default=False,
                         action='store_true',
-                        help="Set this flag if you are using an uncased model.")                                                        
+                        help="Set this flag if you are using an uncased model.")
     args = parser.parse_args()
-    
+
     run(args)
-    
+
 
 
     #args = Args()
@@ -229,7 +228,7 @@ if __name__ == "__main__":
     #args.do_lower_case = True
     #args.max_seq_length = 128
     #args.eval_batch_size = 100
-    #    
+    #
     #test(args)
 
 
@@ -242,4 +241,4 @@ if __name__ == "__main__":
     #args.bert_model ="bert-base-multilingual-cased"
     #args.do_lower_case = False
     #args.max_seq_length = 128
-    #args.eval_batch_size = 128            
+    #args.eval_batch_size = 128

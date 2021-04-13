@@ -21,9 +21,9 @@ if not os.path.exists(pathForTestsets):
 
 def fileNameFor(name, setName="", classname="", folder=pathForSets):
     filename = name
-    if(setName is not ""):
+    if(setName != ""):
         filename += "."+setName
-    if(classname is not ""):
+    if(classname != ""):
         filename += "."+classname
     return folder+filename
 
@@ -56,7 +56,7 @@ def cleanAndSplit(name, dataLoader):
 
     if isSetAlreadyLoaded == False:
         print("cleaning set: "+name)
-        data = textcleaner.cleanData(dataLoader())        
+        data = textcleaner.cleanData(dataLoader())
         neutral, negativ, positiv = tools.splitPerClass(data)
 
         save(name, "neutral", neutral)
@@ -77,10 +77,10 @@ def createSetForClass(classname, dataSets):
     filePath = fileNameFor("all", "", classname)
 
     executeToFile(command, filePath)
-    
+
     return tools.lineCount(filePath)
 
-def splitTrainValidTest(data, train, valid, test):    
+def splitTrainValidTest(data, train, valid, test):
     trainCount = round(len(data) * train)
     validCount = round(len(data) * valid)
     train = data[:trainCount]
@@ -96,9 +96,9 @@ def split(count, className):
     fileName = fileNameFor("all", "", className)
     data = tools.readAllLines(fileName)
     random.shuffle(data)
-    
+
     data = data[:count]
-    
+
     train, valid, test = splitTrainValidTest(data, .7, .2, .1)
 
     tools.writeAllLines(fileNameFor("all", "train", className), train)
@@ -156,7 +156,7 @@ def run():
     print("neutral \t{}\npostitive\t{}\nnegative\t{}".format(
         neutralSamples, positiveSamples, negativeSamples))
 
-    # balance classes    
+    # balance classes
     if(tools.config()['preprocessing']['balance'] == 'down'):
        print("\nbalance classes with downsampling")
        samplesPerClass = min(neutralSamples, positiveSamples, negativeSamples)
@@ -166,10 +166,10 @@ def run():
        split(samplesPerClass, "neutral")
        split(samplesPerClass, "positive")
        split(samplesPerClass, "negative")
-    else:           
+    else:
        split(neutralSamples, "neutral")
        split(positiveSamples, "positive")
-       split(negativeSamples, "negative") 
+       split(negativeSamples, "negative")
        print(f"random sampels per class neutral: {neutralSamples}")
        print(f"random sampels per class positiv: {positiveSamples}")
        print(f"random sampels per class negative:{negativeSamples}")
@@ -179,11 +179,11 @@ def run():
     trainFile = path+"model.train"
     validFile = path+"model.valid"
     testFile = path+"model.test"
-    
+
     executeToFile(f"cat {pathForSets}all.train.* | cut -f2,3", trainFile, shellMode=True)
     executeToFile(f"cat {pathForSets}all.valid.* | cut -f2,3", validFile, shellMode=True)
     executeToFile(f"cat {pathForSets}all.test.*", testFile, shellMode=True)
-    
+
     totalTrain = tools.lineCount(trainFile)
     totalValid = tools.lineCount(validFile)
     totalTest = tools.lineCount(testFile)
@@ -201,12 +201,12 @@ def run():
     if os.path.exists(testFile+".extra"): os.remove(testFile+".extra")
 
     for test_set in test_sets:
-       executeToFile(f"cat {pathForSets}{test_set}.* ", testFile+".extra",mode="a", shellMode=True) 
+       executeToFile(f"cat {pathForSets}{test_set}.* ", testFile+".extra",mode="a", shellMode=True)
 
     executeToFile(f"cat {testFile} {testFile}.extra", path+"model.test.full", shellMode=True)
 
-    executeToFile(f"cat {pathForSets}all.negative {pathForSets}all.neutral {pathForSets}all.positive | cut -f3 ", path+"wordvecc.train", shellMode=True)     
-    
+    executeToFile(f"cat {pathForSets}all.negative {pathForSets}all.neutral {pathForSets}all.positive | cut -f3 ", path+"wordvecc.train", shellMode=True)
+
     # cleanup
     #subprocess.call("rm "+pathForSets+"all*",shell=True)
 

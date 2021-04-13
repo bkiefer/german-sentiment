@@ -26,15 +26,18 @@ import argparse
 import random
 from tqdm import tqdm, trange
 
+from pathlib import Path
+
 import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from pytorch_pretrained_bert.tokenization import BertTokenizer
-from pytorch_pretrained_bert.modeling import BertForSequenceClassification
-from pytorch_pretrained_bert.optimization import BertAdam
-from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
+from transformers import AutoTokenizer
+from transformers import BertForSequenceClassification
+from transformers import AdamW
+from transformers import PYTORCH_PRETRAINED_BERT_CACHE
+from transformers import get_linear_schedule_with_warmup
 from processors import InputExample, ColaProcessor, MnliProcessor, MrpcProcessor,SentimentProcessor
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -261,7 +264,7 @@ def main():
         "cola": 2,
         "mnli": 3,
         "mrpc": 2,
-        "sentiment":3,     
+        "sentiment":3,
     }
 
     if args.local_rank == -1 or args.no_cuda:
@@ -302,9 +305,9 @@ def main():
 
     processor = processors[task_name]()
     num_labels = num_labels_task[task_name]
-    label_list = processor.get_labels()  
+    label_list = processor.get_labels()
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = AutoTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
     train_examples = None
     num_train_steps = None
@@ -313,11 +316,14 @@ def main():
         num_train_steps = int(
             len(train_examples) / args.train_batch_size / args.gradient_accumulation_steps * args.num_train_epochs)
 
-    # Prepare model    
+    # Prepare model
+    cache = PYTORCH_PRETRAINED_BERT_CACHE
+    if (cache is not Path):
+        cache = Path(cache)
     model = BertForSequenceClassification.from_pretrained(args.bert_model,
-              cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / 'distributed_{}'.format(args.local_rank),
+              cache_dir=cache / 'distributed_{}'.format(args.local_rank),
               num_labels = num_labels)
-    
+
     if args.fp16:
         model.half()
     model.to(device)
@@ -358,10 +364,10 @@ def main():
             optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
 
     else:
-        optimizer = BertAdam(optimizer_grouped_parameters,
-                             lr=args.learning_rate,
-                             warmup=args.warmup_proportion,
-                             t_total=t_total)
+        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, correct_bias=False)
+        scheduler = get_linear_schedule_with_warmup(optimizer,
+                                                    num_warmup_steps=t_total * args.warmup_proportion,
+                                                    num_training_steps=t_total)  # PyTorch scheduler
 
     global_step = 0
     model_file = os.path.join(args.output_dir, "pytorch_model.bin")
@@ -391,7 +397,8 @@ def main():
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids = batch
-                loss = model(input_ids, segment_ids, input_mask, label_ids)
+                outputs = model(input_ids, segment_ids, input_mask, labels=label_ids)
+                loss = outputs[0]
                 if n_gpu > 1:
                     loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
@@ -411,16 +418,17 @@ def main():
                     for param_group in optimizer.param_groups:
                         param_group['lr'] = lr_this_step
                     optimizer.step()
+                    scheduler.step()
                     optimizer.zero_grad()
                     global_step += 1
 
         # Save a trained model
-        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self        
+        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         torch.save(model_to_save.state_dict(), model_file)
 
     # Load a trained model that you have fine-tuned
     model_state_dict = torch.load(model_file,map_location='cpu')
-    model = BertForSequenceClassification.from_pretrained(args.bert_model, state_dict=model_state_dict,num_labels = num_labels)            
+    model = BertForSequenceClassification.from_pretrained(args.bert_model, state_dict=model_state_dict,num_labels = num_labels)
     model.to(device)
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
@@ -444,7 +452,7 @@ def main():
         nb_eval_steps, nb_eval_examples = 0, 0
 
         steps = len(eval_examples) / int(args.eval_batch_size)
-        
+
         for input_ids, input_mask, segment_ids, label_ids in eval_dataloader:
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
@@ -452,8 +460,8 @@ def main():
             label_ids = label_ids.to(device)
 
             with torch.no_grad():
-                tmp_eval_loss = model(input_ids, segment_ids, input_mask, label_ids)
-                logits = model(input_ids, segment_ids, input_mask)
+                outputs = model(input_ids, segment_ids, input_mask, labels=label_ids)
+                tmp_eval_loss, logits = outputs[:2]
 
             logits = logits.detach().cpu().numpy()
             label_ids = label_ids.to('cpu').numpy()
