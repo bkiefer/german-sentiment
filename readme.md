@@ -2,6 +2,10 @@
 
 This repository contains the code and data for the Paper ["Training a Broad-Coverage German Sentiment Classification Model for Dialog Systems"](https://www.aclweb.org/anthology/2020.lrec-1.202.pdf) published at LREC 2020.
 
+## Differences to the original repository
+
+The code from the original repository has been migrated to work with [huggingface transformers](https://huggingface.co/transformers/) >v4, everything else remains the same.
+
 ## Usage
 
 If you like to use the models for your own projects please head over to [this repository.](https://github.com/oliverguhr/german-sentiment-lib) It contains a Python package that provides a easy to use interface.
