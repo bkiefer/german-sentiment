@@ -40,11 +40,11 @@ class SystemUnderTest(object):
 
 class BertTest(SystemUnderTest):
     """FasText sequence classification tester"""
-    def __init__(self,no_cuda,local_rank,task_name,output_dir,data_dir,bert_model,do_lower_case,max_seq_length,eval_batch_size,fp16):
+    def __init__(self,no_cuda,local_rank,task_name,checkpoint,data_dir,bert_model,do_lower_case,max_seq_length,eval_batch_size,fp16):
         self.no_cuda = no_cuda
         self.local_rank = local_rank
         self.task_name = task_name
-        self.output_dir = output_dir
+        self.checkpoint = checkpoint
         self.data_dir = data_dir
         self.bert_model = bert_model
         self.do_lower_case = do_lower_case
@@ -56,7 +56,7 @@ class BertTest(SystemUnderTest):
         self.label_list = self.processor.get_labels()
         self.num_labels = len(self.label_list)
 
-        model_file = os.path.join(args.output_dir, "pytorch_model.bin")
+        model_file = os.path.join(args.checkpoint)
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.bert_model, do_lower_case=self.do_lower_case)
         self.device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -160,7 +160,7 @@ def run(args):
     plt = printcm.plot_confusion_matrix(all_truth, all_prediction, classes=[
                                       "negative", "neutral", "positive"], normalize=True, title="Bert unbalanced")
 
-    plt.savefig(args.output_dir + "cm.pdf")
+    plt.savefig(args.checkpoint + "_cm.pdf")
 
     return table
 
@@ -181,11 +181,11 @@ if __name__ == "__main__":
                         type=str,
                         required=True,
                         help="The name of the task to train.")
-    parser.add_argument("--output_dir",
+    parser.add_argument("--checkpoint",
                         default=None,
                         type=str,
                         required=True,
-                        help="The output directory where the model predictions and checkpoints will be written.")
+                        help="The model to test.")
     parser.add_argument("--max_seq_length",
                         default=128,
                         type=int,
