@@ -21,7 +21,7 @@ import tools
 import argparse
 import printcm
 
-logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+logging.basicConfig(format = '%(asctime)s %(levelname)s %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)
 logger = logging.getLogger(__name__)
@@ -156,9 +156,14 @@ def run(args):
                "fscoreMicro", "precisionMacro", "recallMacro", "fscoreMacro"]
     print(tabulate(table, headers, tablefmt="pipe", floatfmt=".4f"))
 
+    output_eval_file = args.checkpoint + "_test_results.txt"
+    with open(output_eval_file, "w") as writer:
+        print(tabulate(table, headers, tablefmt="pipe", floatfmt=".4f"),
+              file=writer)
 
-    plt = printcm.plot_confusion_matrix(all_truth, all_prediction, classes=[
-                                      "negative", "neutral", "positive"], normalize=True, title="Bert unbalanced")
+    plt = printcm.plot_confusion_matrix(all_truth, all_prediction,
+                                        classes=["negative", "neutral", "positive"],
+                                        normalize=True, title="Bert unbalanced")
 
     plt.savefig(args.checkpoint + "_cm.pdf")
 

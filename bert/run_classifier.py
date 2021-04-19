@@ -162,7 +162,8 @@ def warmup_linear(x, warmup=0.002):
         return x/warmup
     return 1.0 - x
 
-def get_dataset(features):
+def get_dataset(examples, labels, max_seq_length, tokenizer):
+    features = convert_examples_to_features(examples, labels, max_seq_length, tokenizer)
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in features], dtype=torch.long)
@@ -210,8 +211,7 @@ def train(model, args, data, device, n_gpu, val_data):
                                                     num_warmup_steps=t_total * args.warmup_proportion,
                                                     num_training_steps=t_total)  # PyTorch scheduler
 
-    #data = get_dataset(convert_examples_to_features(
-    #    examples, label_list, args.max_seq_length, tokenizer))
+    #data = get_dataset(examples, label_list, args.max_seq_length, tokenizer)
     if args.local_rank == -1:
         sampler = RandomSampler(data)
     else:
@@ -220,10 +220,10 @@ def train(model, args, data, device, n_gpu, val_data):
 
     model.train()
     for e in range(int(args.num_train_epochs)):
-        logger.info("Epoch %d", e)
         tr_loss = 0
         nb_tr_examples, nb_tr_steps = 0, 0
-        for step, batch in enumerate(tqdm(dataloader, desc="Iteration")):
+        for step, batch in enumerate(tqdm(dataloader,
+                                          desc="Epoch {:0>2} ".format(e+1))):
             batch = tuple(t.to(device) for t in batch)
             input_ids, input_mask, segment_ids, label_ids = batch
             outputs = model(input_ids, segment_ids, input_mask, labels=label_ids)
@@ -250,22 +250,27 @@ def train(model, args, data, device, n_gpu, val_data):
                 scheduler.step()
                 optimizer.zero_grad()
                 global_step += 1
-        logger.info("Epoch loss: %f", tr_loss)
-        if val_data:
-            result = eval(model, args, val_data, device)
-            for key in sorted(result.keys()):
-                logger.info("  %s = %s", key, str(result[key]))
+        logger.info("Epoch loss: %f", tr_loss / nb_tr_steps)
         # Save a trained model
-        model_file = os.path.join(args.output_dir, "pytorch_model_{:0>2}.bin".format(e))
+        model_file = os.path.join(args.output_dir, "pytorch_model{:0>2}.bin".format(e + 1))
         # Only save the model itself
         model_to_save = model.module if hasattr(model, 'module') else model
         torch.save(model_to_save.state_dict(), model_file)
+        if val_data:
+            result = eval(model, args, val_data, device)
+            result['loss'] = tr_loss / nb_tr_steps
 
+            output_eval_file = os.path.join(args.output_dir,
+                                            "eval_results{:0>2}.txt".format(e + 1))
+            with open(output_eval_file, "w") as writer:
+                logger.info("***** Eval results *****")
+                for key in sorted(result.keys()):
+                    logger.info("  %s = %s", key, str(result[key]))
+                    writer.write("%s = %s\n" % (key, str(result[key])))
 
 def eval(model, args, eval_data, device):
-    logger.info("***** Running evaluation *****")
-    logger.info("  Num examples = %d", len(eval_data))
-    logger.info("  Batch size = %d", args.eval_batch_size)
+    logger.info("***** Running evaluation: %d examples, batch size %d",
+                len(eval_data), args.eval_batch_size)
     # Run prediction for full data
     eval_sampler = SequentialSampler(eval_data)
     eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.eval_batch_size)
@@ -303,7 +308,6 @@ def eval(model, args, eval_data, device):
     result = {'eval_loss': eval_loss,
               'eval_accuracy': eval_accuracy,
               'global_step': global_step}
-#              'loss': tr_loss/nb_tr_steps if args.do_train else "none"}
     return result
 
 def main():
@@ -477,16 +481,20 @@ def main():
     global_step = 0
 
     if args.do_train:
-        train_examples = processor.get_train_examples(args.data_dir)
-        data = get_dataset(convert_examples_to_features(
-            train_examples, label_list, args.max_seq_length, tokenizer))
-        val_data = data = get_dataset(convert_examples_to_features(
-            processor.get_dev_examples(args.data_dir),
-            label_list, args.max_seq_length, tokenizer))
+        data = get_dataset(processor.get_train_examples(args.data_dir),
+                           label_list, args.max_seq_length, tokenizer)
+        if args.do_eval:
+            val_data = get_dataset(processor.get_dev_examples(args.data_dir),
+                                   label_list, args.max_seq_length, tokenizer)
+        else:
+            val_data = None
         train(model, args, data, device, n_gpu, val_data)
 
+    # Done already
+    return
+
     # Load a trained model that you have fine-tuned
-    model_state_dict = torch.load(model_file,map_location='cpu')
+    model_state_dict = torch.load(model_file, map_location='cpu')
     model = AutoModelForSequenceClassification.from_pretrained(args.bert_model, state_dict=model_state_dict, num_labels = num_labels)
     model.to(device)
 

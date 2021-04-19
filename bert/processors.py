@@ -7,7 +7,7 @@ def processor_for_task(name):
         "cola": ColaProcessor,
         "mnli": MnliProcessor,
         "mrpc": MrpcProcessor,
-        "sentiment":SentimentProcessor,        
+        "sentiment":SentimentProcessor,
     }
     return processors[name]()
 
@@ -69,7 +69,7 @@ class SentimentProcessor(DataProcessor):
     def get_dev_examples(self, data_dir):
         """See base class."""
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "model.valid")),"dev")
+            self._read_tsv(os.path.join(data_dir, "model.valid")), "dev")
 
     def get_test_examples(self, data_dir):
         """See base class."""
@@ -86,9 +86,9 @@ class SentimentProcessor(DataProcessor):
 
         # group by dataset
         res = defaultdict(list)
-        for sample in data: 
+        for sample in data:
             res[sample[0]].append(sample[1:])
-        
+
         #reformat data
         data = [[k,v] for k,v in res.items()]
 
@@ -104,9 +104,9 @@ class SentimentProcessor(DataProcessor):
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
-            #if len(line[1]) > 128: 
+            #if len(line[1]) > 128:
             #    continue #skip lines that are too long. otherwhise they will be truncated
-            # count tokens, not chars!!!    
+            # count tokens, not chars!!!
             guid = "%s-%s" % (set_type, i)
             text_a = line[1].replace("ä","ae").replace("ö","oe").replace("ü","ue").replace("ß","ss")
             label = line[0].replace("__label__","")
