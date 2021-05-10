@@ -11,8 +11,8 @@ The code from the original repository has been migrated to work with [huggingfac
 ```bash
 conda create -n sentiment
 conda activate sentiment
-git clone https://bitbucket.intern.semvox.de/projects/SR/repos/sentianalysistraining
-cd sentianalysistraining
+git clone https://github.com/bkiefer/german-sentiment
+cd german-sentiment
 conda install -c huggingface transformers
 conda install -c conda-forge tqdm matplotlib tabulate sklearn
 # optional: conda install -c anaconda ipython
