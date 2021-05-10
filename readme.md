@@ -6,6 +6,28 @@ This repository contains the code and data for the Paper ["Training a Broad-Cove
 
 The code from the original repository has been migrated to work with [huggingface transformers](https://huggingface.co/transformers/) >v4, everything else remains the same.
 
+## BK: My preparations for training a model only based on the PotTS data
+
+```bash
+conda create -n sentiment
+conda activate sentiment
+git clone https://bitbucket.intern.semvox.de/projects/SR/repos/sentianalysistraining
+cd sentianalysistraining
+conda install -c huggingface transformers
+conda install -c conda-forge tqdm matplotlib tabulate sklearn
+# optional: conda install -c anaconda ipython
+# which cudatoolkit version depends on the available GPU(s)
+conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch
+cd fasttext
+# delete all datasets from config.json except PotTS and run preprocess.py
+# the preprocessed output is in ./modeldata, move it e.g. to
+# ../PotTS-unbalanced
+mv ./modeldata ../PotTS-unbalanced
+cd ../bert
+# modify sentiment-train.sh parameters, esp. dataset!
+# I had to use smaller training batch size (16) to fit my gpu memory (8GB)
+```
+
 ## Usage
 
 If you like to use the models for your own projects please head over to [this repository.](https://github.com/oliverguhr/german-sentiment-lib) It contains a Python package that provides a easy to use interface.
@@ -152,7 +174,7 @@ If you use the combined data set for your work, you can use this list to cite al
 @LanguageResource{sanger_scare_2016,
 	address = {Portorož, Slovenia},
 	title = {{SCARE} ― {The} {Sentiment} {Corpus} of {App} {Reviews} with {Fine}-grained {Annotations} in {German}},
-	url = {https://www.aclweb.org/anthology/L16-1178},	
+	url = {https://www.aclweb.org/anthology/L16-1178},
 	urldate = {2019-11-07},
 	booktitle = {Proceedings of the {Tenth} {International} {Conference} on {Language} {Resources} and {Evaluation} ({LREC}'16)},
 	publisher = {European Language Resources Association (ELRA)},
@@ -194,7 +216,7 @@ If you use the combined data set for your work, you can use this list to cite al
 	booktitle = {Proceedings of the {GermEval} 2017 – {Shared} {Task} on {Aspect}-based {Sentiment} in {Social} {Media} {Customer} {Feedback}},
 	author = {Wojatzki, Michael and Ruppert, Eugen and Holschneider, Sarah and Zesch, Torsten and Biemann, Chris},
 	year = {2017},
-	pages = {1--12}	
+	pages = {1--12}
 }
 
 @inproceedings{goldhahn-etal-2012-building,
